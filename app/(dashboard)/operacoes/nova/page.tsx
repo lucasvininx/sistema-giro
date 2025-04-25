@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
@@ -60,6 +60,7 @@ const formSchema = z.object({
   tipos_imovel: z.array(z.string()).min(1, "Selecione pelo menos um tipo de imóvel"),
   status: z.string().min(1, "Status é obrigatório"),
   socios: z.array(socioSchema).min(1, "Adicione pelo menos um sócio"),
+  parceiro_id: z.string().optional(),
 })
 
 interface ImagemPreview {
@@ -76,12 +77,39 @@ interface DocumentoPreview {
   tipo: string
 }
 
+interface Parceiro {
+  id: string
+  nome: string
+  documento: string
+}
+
 export default function NovaOperacaoPage() {
   const { profile, isMaster } = useAuth()
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [imagens, setImagens] = useState<ImagemPreview[]>([])
   const [documentos, setDocumentos] = useState<DocumentoPreview[]>([])
+  const [parceiros, setParceiros] = useState<Parceiro[]>([])
+  const [isLoadingParceiros, setIsLoadingParceiros] = useState(false)
+
+  // Carregar parceiros
+  useEffect(() => {
+    const fetchParceiros = async () => {
+      setIsLoadingParceiros(true)
+      try {
+        const { data, error } = await supabase.from("parceiros").select("id, nome, documento").order("nome")
+
+        if (error) throw error
+        setParceiros(data || [])
+      } catch (error) {
+        console.error("Erro ao buscar parceiros:", error)
+      } finally {
+        setIsLoadingParceiros(false)
+      }
+    }
+
+    fetchParceiros()
+  }, [])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -99,6 +127,7 @@ export default function NovaOperacaoPage() {
       valor_aluguel: 0,
       tipos_imovel: [],
       status: "pre_analise",
+      parceiro_id: undefined,
       socios: [
         {
           id: uuidv4(),
@@ -217,11 +246,14 @@ export default function NovaOperacaoPage() {
     setIsSubmitting(true)
 
     try {
-      // Criar a operação
+      // Extrair os sócios do objeto de dados
+      const { socios, ...operacaoData } = data
+
+      // Criar a operação sem incluir os sócios
       const { data: operacao, error } = await supabase
         .from("operacoes")
         .insert({
-          ...data,
+          ...operacaoData,
           created_by: profile.id,
         })
         .select()
@@ -229,6 +261,21 @@ export default function NovaOperacaoPage() {
 
       if (error) {
         throw new Error(`Erro ao criar operação: ${error.message}`)
+      }
+
+      // Inserir os sócios na tabela de sócios
+      if (socios && socios.length > 0) {
+        const sociosComOperacaoId = socios.map((socio) => ({
+          ...socio,
+          operacao_id: operacao.id,
+        }))
+
+        const { error: sociosError } = await supabase.from("socios").insert(sociosComOperacaoId)
+
+        if (sociosError) {
+          console.error(`Erro ao inserir sócios: ${sociosError.message}`)
+          // Não vamos interromper o fluxo se houver erro ao inserir sócios
+        }
       }
 
       // Upload das imagens
@@ -353,6 +400,33 @@ export default function NovaOperacaoPage() {
                     )}
                   />
                 </div>
+
+                {/* Campo de parceiro indicador */}
+                <FormField
+                  control={form.control}
+                  name="parceiro_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Parceiro Indicador (Opcional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um parceiro (opcional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {parceiros.map((parceiro) => (
+                            <SelectItem key={parceiro.id} value={parceiro.id}>
+                              {parceiro.nome} - {parceiro.documento}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Selecione o parceiro que indicou esta operação, se aplicável.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <FormField
@@ -663,7 +737,7 @@ export default function NovaOperacaoPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Status da Operação</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isMaster}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione o status" />
@@ -671,19 +745,28 @@ export default function NovaOperacaoPage() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="pre_analise">Pré-análise</SelectItem>
-                          <SelectItem value="analise">Análise</SelectItem>
-                          <SelectItem value="analise_credito">Análise de Crédito</SelectItem>
-                          <SelectItem value="analise_juridica_laudo">Análise Jurídica e Laudo de Engenharia</SelectItem>
-                          <SelectItem value="comite">Comitê</SelectItem>
-                          <SelectItem value="credito_aprovado">Crédito Aprovado</SelectItem>
-                          <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
-                          <SelectItem value="contrato_registrado">Contrato Registrado</SelectItem>
-                          <SelectItem value="recusada">Recusada</SelectItem>
+                          {isMaster && (
+                            <>
+                              <SelectItem value="analise">Análise</SelectItem>
+                              <SelectItem value="analise_credito">Análise de Crédito</SelectItem>
+                              <SelectItem value="analise_juridica_laudo">
+                                Análise Jurídica e Laudo de Engenharia
+                              </SelectItem>
+                              <SelectItem value="comite">Comitê</SelectItem>
+                              <SelectItem value="credito_aprovado">Crédito Aprovado</SelectItem>
+                              <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
+                              <SelectItem value="contrato_registrado">Contrato Registrado</SelectItem>
+                              <SelectItem value="recusada">Recusada</SelectItem>
+                            </>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
                       {!isMaster && (
-                        <FormDescription>Apenas administradores podem alterar o status da operação.</FormDescription>
+                        <FormDescription>
+                          Novas operações são criadas com status "Pré-análise". Apenas administradores podem definir
+                          outros status.
+                        </FormDescription>
                       )}
                     </FormItem>
                   )}

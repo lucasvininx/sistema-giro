@@ -15,12 +15,16 @@ import Image from "next/image"
 import Link from "next/link"
 
 const tiposImovel = [
-  { id: "casa", label: "Casa" },
+  { id: "casa_rua", label: "Casa de rua" },
+  { id: "casa_condominio", label: "Casa de condomínio" },
+  { id: "terreno_condominio", label: "Terreno de condomínio" },
+  { id: "comercial", label: "Comercial" },
+  { id: "chacara", label: "Chácara" },
   { id: "apartamento", label: "Apartamento" },
-  { id: "terreno", label: "Terreno" },
-  { id: "sala_comercial", label: "Sala Comercial" },
-  { id: "galpao", label: "Galpão" },
-  { id: "outro", label: "Outro" },
+  { id: "imovel_rural_produtivo", label: "Imóvel rural produtivo" },
+  { id: "imovel_nao_averbado", label: "Imóvel não averbado" },
+  { id: "imovel_misto", label: "Imóvel misto" },
+  { id: "multi_familiar", label: "Multi familiar" },
 ]
 
 export default function OperacaoDetalhesPage() {
@@ -28,17 +32,27 @@ export default function OperacaoDetalhesPage() {
   const router = useRouter()
   const { profile, isMaster } = useAuth()
   const [operacao, setOperacao] = useState<any | null>(null)
+  const [parceiro, setParceiro] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [imagens, setImagens] = useState<any[]>([])
   const [documentos, setDocumentos] = useState<any[]>([])
   const [socios, setSocios] = useState<any[]>([])
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
+  // Verificar se o ID é "nova" e redirecionar
   useEffect(() => {
+    if (id === "nova") {
+      router.push("/operacoes/nova")
+      return
+    }
+
     fetchOperacao()
-  }, [id])
+  }, [id, router])
 
   const fetchOperacao = async () => {
+    // Se o ID for "nova", não tente buscar detalhes
+    if (id === "nova") return
+
     setIsLoading(true)
 
     try {
@@ -55,6 +69,19 @@ export default function OperacaoDetalhesPage() {
       if (operacaoError) throw operacaoError
 
       setOperacao(operacaoData)
+
+      // Se a operação tiver um parceiro_id, buscar os detalhes do parceiro
+      if (operacaoData.parceiro_id) {
+        const { data: parceiroData, error: parceiroError } = await supabase
+          .from("parceiros")
+          .select("id, nome, documento")
+          .eq("id", operacaoData.parceiro_id)
+          .single()
+
+        if (!parceiroError && parceiroData) {
+          setParceiro(parceiroData)
+        }
+      }
 
       // Buscar imagens
       const { data: imagensData } = await supabase
@@ -123,6 +150,10 @@ export default function OperacaoDetalhesPage() {
     } finally {
       setIsUpdatingStatus(false)
     }
+  }
+
+  if (id === "nova") {
+    return null // Retornar null para evitar renderização, já que o useEffect irá redirecionar
   }
 
   if (isLoading) {
@@ -225,6 +256,12 @@ export default function OperacaoDetalhesPage() {
                       <h3 className="text-sm font-medium text-muted-foreground">Data de Criação</h3>
                       <p className="text-base">{new Date(operacao.created_at).toLocaleDateString("pt-BR")}</p>
                     </div>
+                    {operacao.parceiro_id && parceiro && (
+                      <div>
+                        <h3 className="text-sm font-medium text-muted-foreground">Parceiro Indicador</h3>
+                        <p className="text-base">{parceiro.nome || "Não informado"}</p>
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
 

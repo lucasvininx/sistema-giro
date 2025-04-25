@@ -27,18 +27,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const fetchSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      handleSession(session)
-
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
         handleSession(session)
-      })
 
-      return () => subscription.unsubscribe()
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+          handleSession(session)
+        })
+
+        return () => subscription.unsubscribe()
+      } catch (error) {
+        console.error("Error fetching session:", error)
+        setIsLoading(false)
+      }
     }
 
     fetchSession()
@@ -47,57 +52,100 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function handleSession(session: Session | null) {
     setIsLoading(true)
 
-    if (!session) {
-      setUser(null)
-      setProfile(null)
-      setIsLoading(false)
-      return
-    }
-
-    setUser(session.user)
-
     try {
-      // Tenta chamar o RPC para obter o perfil do usuário
-      const { data, error } = await supabase
-        .rpc("get_profile_by_id", { user_id: session.user.id })
-        .maybeSingle()
+      if (!session) {
+        setUser(null)
+        setProfile(null)
+        setIsLoading(false)
+        return
+      }
 
-      // Se houver erro ou retorno vazio, tenta buscar com consulta direta
-      if (error || !data || Object.keys(data).length === 0) {
-        const { data: profileData, error: profileError } = await supabase
+      setUser(session.user)
+
+      // Método 1: Usar a função RPC get_my_profile
+      try {
+        const { data: profileData, error: profileError } = await supabase.rpc("get_my_profile").maybeSingle()
+
+        if (!profileError && profileData) {
+          console.log("Profile loaded via RPC:", profileData)
+          setProfile(profileData as UserProfile)
+          setIsLoading(false)
+          return
+        } else if (profileError) {
+          console.warn("Error using get_my_profile RPC:", profileError)
+        }
+      } catch (rpcError) {
+        console.warn("RPC method failed:", rpcError)
+      }
+
+      // Método 2: Tentar consulta direta
+      try {
+        console.log("Trying direct query for user ID:", session.user.id)
+        const { data: directData, error: directError } = await supabase
           .from("profiles")
           .select("*")
           .eq("id", session.user.id)
           .maybeSingle()
 
-        if (profileError || !profileData || Object.keys(profileData).length === 0) {
-          console.error("Erro ao buscar perfil do usuário:", profileError || "Perfil não encontrado.")
-          setProfile(null)
-        } else {
-          setProfile(profileData as UserProfile)
+        if (!directError && directData) {
+          console.log("Profile loaded via direct query:", directData)
+          setProfile(directData as UserProfile)
+        } else if (directError) {
+          console.warn("Error in direct query:", directError)
+
+          // Método 3: Tentar criar o perfil se não existir
+          try {
+            const { data: newProfile, error: createError } = await supabase
+              .from("profiles")
+              .insert({
+                id: session.user.id,
+                email: session.user.email,
+                role: "funcionario",
+              })
+              .select()
+              .single()
+
+            if (!createError && newProfile) {
+              console.log("Created new profile:", newProfile)
+              setProfile(newProfile as UserProfile)
+            } else {
+              console.error("Failed to create profile:", createError)
+            }
+          } catch (createError) {
+            console.error("Error creating profile:", createError)
+          }
         }
-      } else {
-        setProfile(data as UserProfile)
+      } catch (queryError) {
+        console.error("Error in direct profile query:", queryError)
       }
     } catch (error) {
-      console.error("Erro ao buscar perfil:", error)
-      setProfile(null)
+      console.error("Error in session handling:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    return { error }
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      return { error }
+    } catch (error) {
+      console.error("Sign in error:", error)
+      return { error }
+    }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
+    try {
+      await supabase.auth.signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Sign out error:", error)
+    }
   }
 
   const isAuthenticated = !!user

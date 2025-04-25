@@ -18,7 +18,7 @@ import {
   Legend,
 } from "recharts"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2 } from "lucide-react"
+import { Loader2, TrendingUp, FileText, CheckCircle, XCircle, Clock, BarChart2 } from "lucide-react"
 
 interface OperacaoStats {
   total: number
@@ -75,10 +75,17 @@ export default function DashboardPage() {
     if (operacoes) {
       const stats: OperacaoStats = {
         total: operacoes.length,
-        aprovadas: operacoes.filter((op) => op.status === "aprovada").length,
+        aprovadas: operacoes.filter(
+          (op) =>
+            op.status === "credito_aprovado" ||
+            op.status === "contrato_assinado" ||
+            op.status === "contrato_registrado",
+        ).length,
         recusadas: operacoes.filter((op) => op.status === "recusada").length,
-        pendentes: operacoes.filter((op) => op.status === "pendente").length,
-        em_andamento: operacoes.filter((op) => op.status === "em_andamento").length,
+        pendentes: operacoes.filter((op) => op.status === "pre_analise" || op.status === "analise").length,
+        em_andamento: operacoes.filter(
+          (op) => op.status === "analise_credito" || op.status === "analise_juridica_laudo" || op.status === "comite",
+        ).length,
         valor_total: operacoes.reduce((sum, op) => sum + (op.valor || 0), 0),
       }
 
@@ -96,7 +103,13 @@ export default function DashboardPage() {
           id: func.id,
           nome: func.nome,
           total_operacoes: funcOperacoes?.length || 0,
-          operacoes_sucesso: funcOperacoes?.filter((op) => op.status === "aprovada").length || 0,
+          operacoes_sucesso:
+            funcOperacoes?.filter(
+              (op) =>
+                op.status === "credito_aprovado" ||
+                op.status === "contrato_assinado" ||
+                op.status === "contrato_registrado",
+            ).length || 0,
           operacoes_falha: funcOperacoes?.filter((op) => op.status === "recusada").length || 0,
           valor_total: funcOperacoes?.reduce((sum, op) => sum + (op.valor || 0), 0) || 0,
         }
@@ -130,10 +143,17 @@ export default function DashboardPage() {
     if (operacoes) {
       const stats: OperacaoStats = {
         total: operacoes.length,
-        aprovadas: operacoes.filter((op) => op.status === "aprovada").length,
+        aprovadas: operacoes.filter(
+          (op) =>
+            op.status === "credito_aprovado" ||
+            op.status === "contrato_assinado" ||
+            op.status === "contrato_registrado",
+        ).length,
         recusadas: operacoes.filter((op) => op.status === "recusada").length,
-        pendentes: operacoes.filter((op) => op.status === "pendente").length,
-        em_andamento: operacoes.filter((op) => op.status === "em_andamento").length,
+        pendentes: operacoes.filter((op) => op.status === "pre_analise" || op.status === "analise").length,
+        em_andamento: operacoes.filter(
+          (op) => op.status === "analise_credito" || op.status === "analise_juridica_laudo" || op.status === "comite",
+        ).length,
         valor_total: operacoes.reduce((sum, op) => sum + (op.valor || 0), 0),
       }
 
@@ -175,45 +195,119 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">{isMaster ? "Dashboard Administrativo" : "Meu Dashboard"}</h1>
 
-      {/* Cards de estatísticas */}
+      {/* Cards de estatísticas com design melhorado */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Total de Operações</CardTitle>
+        <Card className="overflow-hidden border-t-4 border-t-blue-500 shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-2 bg-blue-50 dark:bg-blue-900/20">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400">Total de Operações</CardTitle>
+              <FileText className="h-5 w-5 text-blue-500" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{operacaoStats.total}</div>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold">{operacaoStats.total}</div>
+            <p className="text-sm text-muted-foreground mt-1">Operações registradas</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Operações Aprovadas</CardTitle>
+        <Card className="overflow-hidden border-t-4 border-t-green-500 shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-2 bg-green-50 dark:bg-green-900/20">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-medium text-green-600 dark:text-green-400">
+                Operações Aprovadas
+              </CardTitle>
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-500">{operacaoStats.aprovadas}</div>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold text-green-600">{operacaoStats.aprovadas}</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {operacaoStats.total > 0
+                ? `${Math.round((operacaoStats.aprovadas / operacaoStats.total) * 100)}% do total`
+                : "0% do total"}
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Operações Recusadas</CardTitle>
+        <Card className="overflow-hidden border-t-4 border-t-red-500 shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-2 bg-red-50 dark:bg-red-900/20">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-medium text-red-600 dark:text-red-400">Operações Recusadas</CardTitle>
+              <XCircle className="h-5 w-5 text-red-500" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-500">{operacaoStats.recusadas}</div>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold text-red-600">{operacaoStats.recusadas}</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {operacaoStats.total > 0
+                ? `${Math.round((operacaoStats.recusadas / operacaoStats.total) * 100)}% do total`
+                : "0% do total"}
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Valor Total</CardTitle>
+        <Card className="overflow-hidden border-t-4 border-t-orange-500 shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-2 bg-orange-50 dark:bg-orange-900/20">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-medium text-orange-600 dark:text-orange-400">Valor Total</CardTitle>
+              <BarChart2 className="h-5 w-5 text-orange-500" />
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-500">
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold text-orange-600">
               {new Intl.NumberFormat("pt-BR", {
                 style: "currency",
                 currency: "BRL",
+                maximumFractionDigits: 0,
               }).format(operacaoStats.valor_total)}
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">Valor total das operações</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Status Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-2 bg-yellow-50 dark:bg-yellow-900/20">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pendentes</CardTitle>
+              <Clock className="h-5 w-5 text-yellow-500" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold text-yellow-600">{operacaoStats.pendentes}</div>
+            <p className="text-sm text-muted-foreground mt-1">Operações em fase inicial (Pré-análise, Análise)</p>
+            <div className="w-full h-2 bg-gray-200 rounded-full mt-2">
+              <div
+                className="h-full bg-yellow-500 rounded-full"
+                style={{
+                  width: `${operacaoStats.total > 0 ? (operacaoStats.pendentes / operacaoStats.total) * 100 : 0}%`,
+                }}
+              ></div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="pb-2 bg-blue-50 dark:bg-blue-900/20">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-medium text-blue-600 dark:text-blue-400">Em Andamento</CardTitle>
+              <TrendingUp className="h-5 w-5 text-blue-500" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="text-3xl font-bold text-blue-600">{operacaoStats.em_andamento}</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Operações em fase de análise detalhada (Análise de Crédito, Jurídica, Comitê)
+            </p>
+            <div className="w-full h-2 bg-gray-200 rounded-full mt-2">
+              <div
+                className="h-full bg-blue-500 rounded-full"
+                style={{
+                  width: `${operacaoStats.total > 0 ? (operacaoStats.em_andamento / operacaoStats.total) * 100 : 0}%`,
+                }}
+              ></div>
             </div>
           </CardContent>
         </Card>
@@ -266,28 +360,35 @@ export default function DashboardPage() {
                 <CardContent>
                   <div className="space-y-4">
                     {operacoesRecentes.map((op) => (
-                      <div key={op.id} className="flex items-center p-3 border rounded-lg">
+                      <div
+                        key={op.id}
+                        className="flex items-center p-3 border rounded-lg hover:bg-accent transition-colors"
+                      >
                         <div className="flex-1">
                           <h3 className="font-medium">{op.cnpj_empresa}</h3>
-                          <p className="text-sm text-gray-500">Por: {op.profiles?.nome}</p>
+                          <p className="text-sm text-muted-foreground">Por: {op.profiles?.nome}</p>
                         </div>
                         <div>
                           <span
                             className={`px-2 py-1 text-xs rounded-full ${
-                              op.status === "aprovada"
+                              op.status === "credito_aprovado" ||
+                              op.status === "contrato_assinado" ||
+                              op.status === "contrato_registrado"
                                 ? "bg-green-100 text-green-800"
                                 : op.status === "recusada"
                                   ? "bg-red-100 text-red-800"
-                                  : op.status === "pendente"
+                                  : op.status === "pre_analise" || op.status === "analise"
                                     ? "bg-yellow-100 text-yellow-800"
                                     : "bg-blue-100 text-blue-800"
                             }`}
                           >
-                            {op.status === "aprovada"
+                            {op.status === "credito_aprovado" ||
+                            op.status === "contrato_assinado" ||
+                            op.status === "contrato_registrado"
                               ? "Aprovada"
                               : op.status === "recusada"
                                 ? "Recusada"
-                                : op.status === "pendente"
+                                : op.status === "pre_analise" || op.status === "analise"
                                   ? "Pendente"
                                   : "Em Andamento"}
                           </span>
@@ -324,7 +425,7 @@ export default function DashboardPage() {
                 <div className="mt-6 overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="bg-gray-100">
+                      <tr className="bg-muted">
                         <th className="p-2 text-left">Funcionário</th>
                         <th className="p-2 text-right">Total Operações</th>
                         <th className="p-2 text-right">Aprovadas</th>
@@ -391,28 +492,37 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 {operacoesRecentes.length > 0 ? (
                   operacoesRecentes.map((op) => (
-                    <div key={op.id} className="flex items-center p-3 border rounded-lg">
+                    <div
+                      key={op.id}
+                      className="flex items-center p-3 border rounded-lg hover:bg-accent transition-colors"
+                    >
                       <div className="flex-1">
                         <h3 className="font-medium">{op.cnpj_empresa}</h3>
-                        <p className="text-sm text-gray-500">{new Date(op.created_at).toLocaleDateString("pt-BR")}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(op.created_at).toLocaleDateString("pt-BR")}
+                        </p>
                       </div>
                       <div>
                         <span
                           className={`px-2 py-1 text-xs rounded-full ${
-                            op.status === "aprovada"
+                            op.status === "credito_aprovado" ||
+                            op.status === "contrato_assinado" ||
+                            op.status === "contrato_registrado"
                               ? "bg-green-100 text-green-800"
                               : op.status === "recusada"
                                 ? "bg-red-100 text-red-800"
-                                : op.status === "pendente"
+                                : op.status === "pre_analise" || op.status === "analise"
                                   ? "bg-yellow-100 text-yellow-800"
                                   : "bg-blue-100 text-blue-800"
                           }`}
                         >
-                          {op.status === "aprovada"
+                          {op.status === "credito_aprovado" ||
+                          op.status === "contrato_assinado" ||
+                          op.status === "contrato_registrado"
                             ? "Aprovada"
                             : op.status === "recusada"
                               ? "Recusada"
-                              : op.status === "pendente"
+                              : op.status === "pre_analise" || op.status === "analise"
                                 ? "Pendente"
                                 : "Em Andamento"}
                         </span>
@@ -420,7 +530,7 @@ export default function DashboardPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-center text-gray-500">Nenhuma operação recente</p>
+                  <p className="text-center text-muted-foreground">Nenhuma operação recente</p>
                 )}
               </div>
             </CardContent>

@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, MoreHorizontal, Plus, Search } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
+import { GuiaAdmin } from "./guia-admin"
 
 export default function UsuariosPage() {
   const { isMaster } = useAuth()
@@ -120,7 +121,7 @@ export default function UsuariosPage() {
 
         toast({
           title: "Usuário criado com sucesso!",
-          description: "O novo usuário foi adicionado ao sistema.",
+          description: `O novo usuário foi adicionado ao sistema como ${newUser.role === "master" ? "Administrador" : "Funcionário"}.`,
         })
 
         setIsDialogOpen(false)
@@ -226,6 +227,8 @@ export default function UsuariosPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <GuiaAdmin />
 
       <Card>
         <CardHeader className="pb-3">
