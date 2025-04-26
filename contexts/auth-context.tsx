@@ -4,7 +4,7 @@ import type React from "react"
 
 import { createContext, useContext, useEffect, useState } from "react"
 import { supabase, type UserProfile } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import type { Session, User } from "@supabase/supabase-js"
 
 interface AuthContextType {
@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -31,12 +32,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const {
           data: { session },
         } = await supabase.auth.getSession()
-        handleSession(session)
+
+        // Don't set loading to false yet if we're on a protected route and need to fetch the profile
+        if (!session && pathname !== "/login") {
+          router.push("/login")
+        }
+
+        await handleSession(session)
 
         const {
           data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-          handleSession(session)
+        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          await handleSession(session)
+
+          // Redirect based on auth state
+          if (!session && pathname !== "/login") {
+            router.push("/login")
+          } else if (session && pathname === "/login") {
+            router.push("/dashboard")
+          }
         })
 
         return () => subscription.unsubscribe()
@@ -47,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     fetchSession()
-  }, [])
+  }, [pathname, router])
 
   async function handleSession(session: Session | null) {
     setIsLoading(true)
@@ -61,6 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setUser(session.user)
+
+      // Skip profile loading for login page
+      if (pathname === "/login") {
+        setIsLoading(false)
+        return
+      }
 
       // Método 1: Usar a função RPC get_my_profile
       try {

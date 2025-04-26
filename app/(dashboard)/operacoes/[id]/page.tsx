@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/use-toast"
-import { ArrowLeft, Calendar, File, Loader2, User } from "lucide-react"
+import { ArrowLeft, Calendar, File, Loader2, User, Building, UserCircle } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 
@@ -101,10 +101,11 @@ export default function OperacaoDetalhesPage() {
 
       setDocumentos(documentosData || [])
 
-      // Buscar sócios
-      const { data: sociosData } = await supabase.from("socios").select("*").eq("operacao_id", id)
-
-      setSocios(sociosData || [])
+      // Buscar sócios (apenas se for pessoa jurídica)
+      if (operacaoData.tipo_pessoa === "juridica") {
+        const { data: sociosData } = await supabase.from("socios").select("*").eq("operacao_id", id)
+        setSocios(sociosData || [])
+      }
     } catch (error) {
       console.error("Erro ao buscar detalhes da operação:", error)
       toast({
@@ -159,7 +160,7 @@ export default function OperacaoDetalhesPage() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -179,6 +180,7 @@ export default function OperacaoDetalhesPage() {
   }
 
   const imagemCapa = imagens.find((img) => img.is_capa) || imagens[0]
+  const isPessoaJuridica = operacao.tipo_pessoa === "juridica"
 
   return (
     <div className="space-y-6">
@@ -211,7 +213,7 @@ export default function OperacaoDetalhesPage() {
               </SelectContent>
             </Select>
 
-            <Button asChild>
+            <Button asChild className="bg-primary hover:bg-primary/90">
               <Link href={`/operacoes/${id}/editar`}>Editar</Link>
             </Button>
           </div>
@@ -223,7 +225,14 @@ export default function OperacaoDetalhesPage() {
           <Card>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-center">
-                <CardTitle>Informações da Operação</CardTitle>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Informações da Operação</CardTitle>
+                  {isPessoaJuridica ? (
+                    <Building className="h-5 w-5 text-primary" />
+                  ) : (
+                    <UserCircle className="h-5 w-5 text-primary" />
+                  )}
+                </div>
                 <span className={`px-3 py-1 text-sm rounded-full ${getStatusColor(operacao.status as StatusOperacao)}`}>
                   {formatarStatus(operacao.status as StatusOperacao)}
                 </span>
@@ -235,15 +244,42 @@ export default function OperacaoDetalhesPage() {
                   <TabsTrigger value="geral">Geral</TabsTrigger>
                   <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
                   <TabsTrigger value="imovel">Imóvel</TabsTrigger>
-                  <TabsTrigger value="socios">Sócios</TabsTrigger>
+                  {isPessoaJuridica && <TabsTrigger value="socios">Sócios</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="geral" className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h3 className="text-sm font-medium text-muted-foreground">CNPJ da Empresa</h3>
-                      <p className="text-base">{operacao.cnpj_empresa}</p>
+                      <h3 className="text-sm font-medium text-muted-foreground">Tipo de Pessoa</h3>
+                      <p className="text-base capitalize">{isPessoaJuridica ? "Pessoa Jurídica" : "Pessoa Física"}</p>
                     </div>
+
+                    {isPessoaJuridica ? (
+                      <div>
+                        <h3 className="text-sm font-medium text-muted-foreground">CNPJ da Empresa</h3>
+                        <p className="text-base">{operacao.cnpj_empresa}</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground">Nome do Cliente</h3>
+                          <p className="text-base">{operacao.nome_cliente}</p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground">CPF</h3>
+                          <p className="text-base">{operacao.cpf}</p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground">Email</h3>
+                          <p className="text-base">{operacao.email_cliente}</p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground">Telefone</h3>
+                          <p className="text-base">{operacao.telefone_cliente}</p>
+                        </div>
+                      </>
+                    )}
+
                     <div>
                       <h3 className="text-sm font-medium text-muted-foreground">Estado Civil</h3>
                       <p className="text-base capitalize">{operacao.estado_civil}</p>
@@ -345,42 +381,44 @@ export default function OperacaoDetalhesPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="socios" className="space-y-4">
-                  {socios.length > 0 ? (
-                    socios.map((socio) => (
-                      <div key={socio.id} className="border rounded-md p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
-                            <User className="h-5 w-5" />
+                {isPessoaJuridica && (
+                  <TabsContent value="socios" className="space-y-4">
+                    {socios.length > 0 ? (
+                      socios.map((socio) => (
+                        <div key={socio.id} className="border rounded-md p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                              <User className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <h3 className="font-medium">{socio.nome}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                {socio.percentual_participacao}% de participação
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h3 className="font-medium">{socio.nome}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              {socio.percentual_participacao}% de participação
-                            </p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">CPF:</span> {socio.cpf}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Email:</span> {socio.email}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Telefone:</span> {socio.telefone}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Estado Civil:</span>{" "}
+                              <span className="capitalize">{socio.estado_civil}</span>
+                            </div>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">CPF:</span> {socio.cpf}
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Email:</span> {socio.email}
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Telefone:</span> {socio.telefone}
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Estado Civil:</span>{" "}
-                            <span className="capitalize">{socio.estado_civil}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-muted-foreground">Nenhum sócio cadastrado</p>
-                  )}
-                </TabsContent>
+                      ))
+                    ) : (
+                      <p className="text-muted-foreground">Nenhum sócio cadastrado</p>
+                    )}
+                  </TabsContent>
+                )}
               </Tabs>
             </CardContent>
           </Card>
@@ -465,7 +503,7 @@ export default function OperacaoDetalhesPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   <User className="h-5 w-5" />
                 </div>
                 <div>
@@ -475,7 +513,7 @@ export default function OperacaoDetalhesPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-500">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   <Calendar className="h-5 w-5" />
                 </div>
                 <div>

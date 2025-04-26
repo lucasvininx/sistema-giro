@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -18,8 +18,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn } = useAuth()
+  const { signIn, isAuthenticated } = useAuth()
   const router = useRouter()
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard")
+    }
+  }, [isAuthenticated, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,7 +56,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-4">
             <Image src="/images/giro-capital-logo.png" alt="Giro Capital" width={180} height={60} priority />
           </div>
-          <CardTitle className="text-2xl font-bold text-center text-orange-500">Sistema Interno</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center text-orange-500">Giro Capital</CardTitle>
           <CardDescription className="text-center">Entre com suas credenciais para acessar o sistema</CardDescription>
         </CardHeader>
         <CardContent>

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { LayoutDashboard, Users, FileText, UserCircle, LogOut, Menu, X, Handshake } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import Image from "next/image"
 
 export function Sidebar() {
   const { signOut, isMaster } = useAuth()
@@ -56,7 +57,7 @@ export function Sidebar() {
       {/* Mobile menu button */}
       <button
         onClick={toggleSidebar}
-        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-orange-500 text-white md:hidden"
+        className="fixed top-4 left-4 z-50 p-2 rounded-md bg-primary text-white md:hidden"
       >
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
@@ -75,7 +76,9 @@ export function Sidebar() {
       >
         <div className="flex flex-col h-full">
           <div className="p-4 border-b border-gray-800">
-            <h1 className="text-2xl font-bold text-orange-500">Sistema Interno</h1>
+            <div className="flex items-center justify-center mb-2">
+              <Image src="/images/giro-capital-logo.png" alt="Giro Capital" width={150} height={50} priority />
+            </div>
           </div>
 
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -85,7 +88,7 @@ export function Sidebar() {
                 href={item.href}
                 className={cn(
                   "flex items-center p-3 rounded-md transition-colors",
-                  item.active ? "bg-orange-500 text-white" : "text-gray-300 hover:bg-gray-800",
+                  item.active ? "bg-primary text-white" : "text-gray-300 hover:bg-gray-800",
                 )}
                 onClick={() => setIsOpen(false)}
               >

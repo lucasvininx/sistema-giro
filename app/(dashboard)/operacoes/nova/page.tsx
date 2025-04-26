@@ -21,6 +21,7 @@ import { File, ImageIcon, Loader2, Plus, Star, Trash2 } from "lucide-react"
 import { v4 as uuidv4 } from "uuid"
 import { toast } from "@/components/ui/use-toast"
 import Image from "next/image"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 const tiposImovel = [
   { id: "casa_rua", label: "Casa de rua" },
@@ -45,9 +46,10 @@ const socioSchema = z.object({
   percentual_participacao: z.coerce.number().min(0).max(100),
 })
 
-const formSchema = z.object({
+// Schema base para ambos os tipos de pessoa
+const baseFormSchema = z.object({
+  tipo_pessoa: z.enum(["fisica", "juridica"]),
   estado_civil: z.string().min(1, "Estado civil é obrigatório"),
-  cnpj_empresa: z.string().min(14, "CNPJ inválido").max(18, "CNPJ inválido"),
   faturamento: z.coerce.number().min(0, "Faturamento deve ser maior que zero"),
   periodo_faturamento: z.enum(["mensal", "anual"]),
   quantidade_funcionarios: z.coerce.number().min(0, "Quantidade inválida"),
@@ -59,9 +61,29 @@ const formSchema = z.object({
   valor_aluguel: z.coerce.number().optional(),
   tipos_imovel: z.array(z.string()).min(1, "Selecione pelo menos um tipo de imóvel"),
   status: z.string().min(1, "Status é obrigatório"),
-  socios: z.array(socioSchema).min(1, "Adicione pelo menos um sócio"),
+  socios: z.array(socioSchema).optional(),
   parceiro_id: z.string().optional(),
+  valor: z.coerce.number().default(0),
 })
+
+// Schema específico para pessoa jurídica
+const pessoaJuridicaSchema = baseFormSchema.extend({
+  tipo_pessoa: z.literal("juridica"),
+  cnpj_empresa: z.string().min(14, "CNPJ inválido").max(18, "CNPJ inválido"),
+  socios: z.array(socioSchema).min(1, "Adicione pelo menos um sócio"),
+})
+
+// Schema específico para pessoa física
+const pessoaFisicaSchema = baseFormSchema.extend({
+  tipo_pessoa: z.literal("fisica"),
+  cpf: z.string().min(11, "CPF inválido").max(14, "CPF inválido"),
+  nome: z.string().min(1, "Nome é obrigatório"),
+  telefone: z.string().min(1, "Telefone é obrigatório"),
+  email: z.string().email("Email inválido"),
+})
+
+// Schema combinado com discriminação por tipo_pessoa
+const formSchema = z.discriminatedUnion("tipo_pessoa", [pessoaJuridicaSchema, pessoaFisicaSchema])
 
 interface ImagemPreview {
   id: string
@@ -114,8 +136,8 @@ export default function NovaOperacaoPage() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      estado_civil: "",
-      cnpj_empresa: "",
+      tipo_pessoa: "juridica",
+      estado_civil: "solteiro",
       faturamento: 0,
       periodo_faturamento: "mensal",
       quantidade_funcionarios: 0,
@@ -128,6 +150,7 @@ export default function NovaOperacaoPage() {
       tipos_imovel: [],
       status: "pre_analise",
       parceiro_id: undefined,
+      valor: 0,
       socios: [
         {
           id: uuidv4(),
@@ -135,16 +158,47 @@ export default function NovaOperacaoPage() {
           cpf: "",
           telefone: "",
           email: "",
-          estado_civil: "",
+          estado_civil: "solteiro",
           percentual_participacao: 0,
         },
       ],
     },
   })
 
-  const { watch, setValue } = form
+  const { watch, setValue, resetField } = form
+  const tipoPessoa = watch("tipo_pessoa")
   const possuiDividas = watch("possui_dividas")
   const imovelAlugado = watch("imovel_alugado")
+
+  // Efeito para resetar campos quando o tipo de pessoa muda
+  useEffect(() => {
+    if (tipoPessoa === "fisica") {
+      // Limpar campos específicos de pessoa jurídica
+      resetField("cnpj_empresa")
+      resetField("socios")
+    } else {
+      // Limpar campos específicos de pessoa física
+      resetField("cpf")
+      resetField("nome")
+      resetField("telefone")
+      resetField("email")
+
+      // Garantir que haja pelo menos um sócio para pessoa jurídica
+      if (!watch("socios") || watch("socios").length === 0) {
+        setValue("socios", [
+          {
+            id: uuidv4(),
+            nome: "",
+            cpf: "",
+            telefone: "",
+            email: "",
+            estado_civil: "solteiro",
+            percentual_participacao: 0,
+          },
+        ])
+      }
+    }
+  }, [tipoPessoa, resetField, setValue, watch])
 
   const handleImagensChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -215,7 +269,7 @@ export default function NovaOperacaoPage() {
   }
 
   const addSocio = () => {
-    const currentSocios = form.getValues("socios")
+    const currentSocios = form.getValues("socios") || []
     setValue("socios", [
       ...currentSocios,
       {
@@ -224,14 +278,14 @@ export default function NovaOperacaoPage() {
         cpf: "",
         telefone: "",
         email: "",
-        estado_civil: "",
+        estado_civil: "solteiro",
         percentual_participacao: 0,
       },
     ])
   }
 
   const removeSocio = (index: number) => {
-    const currentSocios = form.getValues("socios")
+    const currentSocios = form.getValues("socios") || []
     if (currentSocios.length > 1) {
       setValue(
         "socios",
@@ -246,26 +300,46 @@ export default function NovaOperacaoPage() {
     setIsSubmitting(true)
 
     try {
-      // Extrair os sócios do objeto de dados
-      const { socios, ...operacaoData } = data
+      // Preparar dados da operação com base no tipo de pessoa
+      const operacaoData: any = {
+        estado_civil: data.estado_civil,
+        faturamento: data.faturamento,
+        periodo_faturamento: data.periodo_faturamento,
+        quantidade_funcionarios: data.quantidade_funcionarios,
+        possui_dividas: data.possui_dividas,
+        valor_dividas: data.possui_dividas ? data.valor_dividas : null,
+        instituicao_financeira: data.possui_dividas ? data.instituicao_financeira : null,
+        dividas_processos: data.possui_dividas ? data.dividas_processos : null,
+        imovel_alugado: data.imovel_alugado,
+        valor_aluguel: data.imovel_alugado ? data.valor_aluguel : null,
+        tipos_imovel: data.tipos_imovel,
+        status: data.status,
+        parceiro_id: data.parceiro_id || null,
+        created_by: profile.id,
+        tipo_pessoa: data.tipo_pessoa,
+        valor: data.valor || 0,
+      }
 
-      // Criar a operação sem incluir os sócios
-      const { data: operacao, error } = await supabase
-        .from("operacoes")
-        .insert({
-          ...operacaoData,
-          created_by: profile.id,
-        })
-        .select()
-        .single()
+      // Adicionar campos específicos com base no tipo de pessoa
+      if (data.tipo_pessoa === "juridica") {
+        operacaoData.cnpj_empresa = data.cnpj_empresa
+      } else {
+        operacaoData.cpf = data.cpf
+        operacaoData.nome_cliente = data.nome
+        operacaoData.telefone_cliente = data.telefone
+        operacaoData.email_cliente = data.email
+      }
+
+      // Criar a operação
+      const { data: operacao, error } = await supabase.from("operacoes").insert(operacaoData).select().single()
 
       if (error) {
         throw new Error(`Erro ao criar operação: ${error.message}`)
       }
 
-      // Inserir os sócios na tabela de sócios
-      if (socios && socios.length > 0) {
-        const sociosComOperacaoId = socios.map((socio) => ({
+      // Inserir os sócios na tabela de sócios (apenas para pessoa jurídica)
+      if (data.tipo_pessoa === "juridica" && data.socios && data.socios.length > 0) {
+        const sociosComOperacaoId = data.socios.map((socio) => ({
           ...socio,
           operacao_id: operacao.id,
         }))
@@ -361,7 +435,52 @@ export default function NovaOperacaoPage() {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Seleção de tipo de pessoa */}
+                <FormField
+                  control={form.control}
+                  name="tipo_pessoa"
+                  render={({ field }) => (
+                    <FormItem className="space-y-3">
+                      <FormLabel>Tipo de Pessoa</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="flex flex-col space-y-1"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="juridica" id="juridica" />
+                            <Label htmlFor="juridica">Pessoa Jurídica</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="fisica" id="fisica" />
+                            <Label htmlFor="fisica">Pessoa Física</Label>
+                          </div>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Valor da operação */}
+                <FormField
+                  control={form.control}
+                  name="valor"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Valor da Operação (R$)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0" {...field} />
+                      </FormControl>
+                      <FormDescription>Informe o valor total da operação</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Campos específicos para pessoa jurídica */}
+                {tipoPessoa === "juridica" && (
                   <FormField
                     control={form.control}
                     name="cnpj_empresa"
@@ -375,31 +494,92 @@ export default function NovaOperacaoPage() {
                       </FormItem>
                     )}
                   />
+                )}
 
-                  <FormField
-                    control={form.control}
-                    name="estado_civil"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estado Civil</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                {/* Campos específicos para pessoa física */}
+                {tipoPessoa === "fisica" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField
+                      control={form.control}
+                      name="nome"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nome Completo</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o estado civil" />
-                            </SelectTrigger>
+                            <Input placeholder="Nome completo" {...field} />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="solteiro">Solteiro</SelectItem>
-                            <SelectItem value="casado">Casado</SelectItem>
-                            <SelectItem value="divorciado">Divorciado</SelectItem>
-                            <SelectItem value="viuvo">Viúvo</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="cpf"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CPF</FormLabel>
+                          <FormControl>
+                            <Input placeholder="000.000.000-00" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="email@exemplo.com" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="telefone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Telefone</FormLabel>
+                          <FormControl>
+                            <Input placeholder="(00) 00000-0000" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="estado_civil"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estado Civil</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o estado civil" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="solteiro">Solteiro</SelectItem>
+                          <SelectItem value="casado">Casado</SelectItem>
+                          <SelectItem value="divorciado">Divorciado</SelectItem>
+                          <SelectItem value="viuvo">Viúvo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {/* Campo de parceiro indicador */}
                 <FormField
@@ -491,14 +671,14 @@ export default function NovaOperacaoPage() {
                         </FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel>Possui dívidas?</FormLabel>
-                          <FormDescription>Marque esta opção se a empresa possui dívidas</FormDescription>
+                          <FormDescription>Marque esta opção se possui dívidas</FormDescription>
                         </div>
                       </FormItem>
                     )}
                   />
 
                   {possuiDividas && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 border-l-2 border-orange-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 border-l-2 border-primary/20">
                       <FormField
                         control={form.control}
                         name="valor_dividas"
@@ -562,7 +742,7 @@ export default function NovaOperacaoPage() {
                   />
 
                   {imovelAlugado && (
-                    <div className="pl-6 border-l-2 border-orange-200">
+                    <div className="pl-6 border-l-2 border-primary/20">
                       <FormField
                         control={form.control}
                         name="valor_aluguel"
@@ -654,7 +834,7 @@ export default function NovaOperacaoPage() {
                                 className="object-cover"
                               />
                               {imagem.isCapa && (
-                                <div className="absolute top-1 left-1 bg-yellow-500 text-white p-1 rounded-full">
+                                <div className="absolute top-1 left-1 bg-primary text-white p-1 rounded-full">
                                   <Star className="h-3 w-3" />
                                 </div>
                               )}
@@ -772,126 +952,129 @@ export default function NovaOperacaoPage() {
                   )}
                 />
 
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium">Sócios</h3>
-                    <Button type="button" variant="outline" size="sm" onClick={addSocio}>
-                      <Plus className="mr-2 h-4 w-4" /> Adicionar Sócio
-                    </Button>
-                  </div>
-
-                  {form.watch("socios").map((_, index) => (
-                    <div key={index} className="rounded-md border p-4 space-y-4">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-medium">Sócio {index + 1}</h4>
-                        {form.watch("socios").length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeSocio(index)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`socios.${index}.nome`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Nome Completo</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`socios.${index}.cpf`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>CPF</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`socios.${index}.telefone`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Telefone</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`socios.${index}.email`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`socios.${index}.estado_civil`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Estado Civil</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o estado civil" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="solteiro">Solteiro</SelectItem>
-                                  <SelectItem value="casado">Casado</SelectItem>
-                                  <SelectItem value="divorciado">Divorciado</SelectItem>
-                                  <SelectItem value="viuvo">Viúvo</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name={`socios.${index}.percentual_participacao`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Percentual de Participação (%)</FormLabel>
-                              <FormControl>
-                                <Input type="number" min="0" max="100" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+                {/* Seção de sócios (apenas para pessoa jurídica) */}
+                {tipoPessoa === "juridica" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">Sócios</h3>
+                      <Button type="button" variant="outline" size="sm" onClick={addSocio}>
+                        <Plus className="mr-2 h-4 w-4" /> Adicionar Sócio
+                      </Button>
                     </div>
-                  ))}
-                </div>
+
+                    {form.watch("socios")?.map((_, index) => (
+                      <div key={index} className="rounded-md border p-4 space-y-4">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-medium">Sócio {index + 1}</h4>
+                          {form.watch("socios")?.length > 1 && (
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeSocio(index)}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name={`socios.${index}.nome`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Nome Completo</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`socios.${index}.cpf`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>CPF</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`socios.${index}.telefone`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Telefone</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`socios.${index}.email`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email</FormLabel>
+                                <FormControl>
+                                  <Input {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`socios.${index}.estado_civil`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Estado Civil</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione o estado civil" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="solteiro">Solteiro</SelectItem>
+                                    <SelectItem value="casado">Casado</SelectItem>
+                                    <SelectItem value="divorciado">Divorciado</SelectItem>
+                                    <SelectItem value="viuvo">Viúvo</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name={`socios.${index}.percentual_participacao`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Percentual de Participação (%)</FormLabel>
+                                <FormControl>
+                                  <Input type="number" min="0" max="100" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <Button type="submit" className="bg-orange-500 hover:bg-orange-600" disabled={isSubmitting}>
+              <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Salvar Operação
               </Button>

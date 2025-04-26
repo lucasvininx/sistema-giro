@@ -10,14 +10,18 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // Se não estiver autenticado e tentar acessar rotas protegidas
-  if (!session && !req.nextUrl.pathname.startsWith("/login")) {
+  // Public routes that don't require authentication
+  const publicRoutes = ["/login"]
+  const isPublicRoute = publicRoutes.some((route) => req.nextUrl.pathname.startsWith(route))
+
+  // If not authenticated and trying to access protected routes
+  if (!session && !isPublicRoute) {
     const redirectUrl = new URL("/login", req.url)
     return NextResponse.redirect(redirectUrl)
   }
 
-  // Se estiver autenticado e tentar acessar login
-  if (session && req.nextUrl.pathname.startsWith("/login")) {
+  // If authenticated and trying to access login
+  if (session && isPublicRoute) {
     const redirectUrl = new URL("/dashboard", req.url)
     return NextResponse.redirect(redirectUrl)
   }
@@ -26,5 +30,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|images|api/auth).*)"],
 }

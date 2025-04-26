@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, MoreHorizontal, Plus, Search } from "lucide-react"
+import { Loader2, MoreHorizontal, Plus, Search, Building, UserCircle } from "lucide-react"
 import Link from "next/link"
 
 export default function OperacoesPage() {
@@ -18,6 +18,7 @@ export default function OperacoesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("todos")
+  const [tipoFilter, setTipoFilter] = useState("todos")
 
   useEffect(() => {
     fetchOperacoes()
@@ -46,11 +47,20 @@ export default function OperacoesPage() {
   }
 
   const filteredOperacoes = operacoes.filter((op) => {
-    const matchesSearch = searchTerm === "" || op.cnpj_empresa.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filtro de busca
+    const matchesSearch =
+      searchTerm === "" ||
+      (op.tipo_pessoa === "juridica" && op.cnpj_empresa?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (op.tipo_pessoa === "fisica" && op.nome_cliente?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (op.tipo_pessoa === "fisica" && op.cpf?.includes(searchTerm))
 
+    // Filtro de status
     const matchesStatus = statusFilter === "todos" || op.status === statusFilter
 
-    return matchesSearch && matchesStatus
+    // Filtro de tipo de pessoa
+    const matchesTipo = tipoFilter === "todos" || op.tipo_pessoa === tipoFilter
+
+    return matchesSearch && matchesStatus && matchesTipo
   })
 
   return (
@@ -58,7 +68,7 @@ export default function OperacoesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold">Operações</h1>
         <Link href="/operacoes/nova">
-          <Button className="bg-orange-500 hover:bg-orange-600">
+          <Button className="bg-primary hover:bg-primary/90">
             <Plus className="mr-2 h-4 w-4" /> Nova Operação
           </Button>
         </Link>
@@ -73,41 +83,55 @@ export default function OperacoesPage() {
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por CNPJ..."
+                placeholder="Buscar por nome ou documento..."
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filtrar por status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="pre_analise">Pré-análise</SelectItem>
-                <SelectItem value="analise">Análise</SelectItem>
-                <SelectItem value="analise_credito">Análise de Crédito</SelectItem>
-                <SelectItem value="analise_juridica_laudo">Análise Jurídica e Laudo</SelectItem>
-                <SelectItem value="comite">Comitê</SelectItem>
-                <SelectItem value="credito_aprovado">Crédito Aprovado</SelectItem>
-                <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
-                <SelectItem value="contrato_registrado">Contrato Registrado</SelectItem>
-                <SelectItem value="recusada">Recusada</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Filtrar por status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="pre_analise">Pré-análise</SelectItem>
+                  <SelectItem value="analise">Análise</SelectItem>
+                  <SelectItem value="analise_credito">Análise de Crédito</SelectItem>
+                  <SelectItem value="analise_juridica_laudo">Análise Jurídica e Laudo</SelectItem>
+                  <SelectItem value="comite">Comitê</SelectItem>
+                  <SelectItem value="credito_aprovado">Crédito Aprovado</SelectItem>
+                  <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
+                  <SelectItem value="contrato_registrado">Contrato Registrado</SelectItem>
+                  <SelectItem value="recusada">Recusada</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={tipoFilter} onValueChange={setTipoFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <SelectValue placeholder="Tipo de Pessoa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="juridica">Pessoa Jurídica</SelectItem>
+                  <SelectItem value="fisica">Pessoa Física</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {isLoading ? (
             <div className="flex justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>CNPJ</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Nome/CNPJ</TableHead>
                     <TableHead>Criado por</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Status</TableHead>
@@ -118,7 +142,16 @@ export default function OperacoesPage() {
                   {filteredOperacoes.length > 0 ? (
                     filteredOperacoes.map((op) => (
                       <TableRow key={op.id}>
-                        <TableCell className="font-medium">{op.cnpj_empresa}</TableCell>
+                        <TableCell>
+                          {op.tipo_pessoa === "juridica" ? (
+                            <Building className="h-4 w-4 text-primary" />
+                          ) : (
+                            <UserCircle className="h-4 w-4 text-primary" />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {op.tipo_pessoa === "juridica" ? op.cnpj_empresa : op.nome_cliente || "Cliente"}
+                        </TableCell>
                         <TableCell>{op.profiles?.nome}</TableCell>
                         <TableCell>{new Date(op.created_at).toLocaleDateString("pt-BR")}</TableCell>
                         <TableCell>
@@ -150,7 +183,7 @@ export default function OperacoesPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                         Nenhuma operação encontrada
                       </TableCell>
                     </TableRow>
