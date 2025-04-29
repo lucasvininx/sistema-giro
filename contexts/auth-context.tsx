@@ -30,17 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const {
         data: { session },
+        error,
       } = await supabase.auth.getSession();
 
-      // ✅ Primeiro: se não tem sessão, redireciona para login e não tenta carregar perfil
-      if (!session) {
-        router.replace("/login");
-        setIsLoading(false);
-        return;
+      if (error) {
+        console.error("Erro ao pegar sessão:", error);
       }
 
-      // ✅ Se tem sessão, carrega o perfil
-      await handleSession(session);
+      if (session?.user) {
+        setUser(session.user);
+        await handleSession(session);
+      } else {
+        setUser(null);
+        setProfile(null);
+        if (window.location.pathname !== "/login") {
+          router.replace("/login");
+        }
+        setIsLoading(false);
+      }
     };
 
     fetchSession();
@@ -48,11 +55,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session) {
-        router.replace("/login");
-      } else {
-        router.replace("/dashboard");
+      if (session?.user) {
+        setUser(session.user);
         await handleSession(session);
+        if (window.location.pathname === "/login") {
+          router.replace("/dashboard");
+        }
+      } else {
+        setUser(null);
+        setProfile(null);
+        if (window.location.pathname !== "/login") {
+          router.replace("/login");
+        }
       }
     });
 
@@ -64,51 +78,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!session) {
         setUser(null);
         setProfile(null);
+        setIsLoading(false);
         return;
       }
 
       setUser(session.user);
 
-      // Buscar o perfil
       const { data: profileData, error: profileError } = await supabase
         .rpc("get_my_profile")
         .maybeSingle();
 
       if (!profileError && profileData) {
         setProfile(profileData as UserProfile);
-        return;
-      }
-
-      // Se RPC falhar, tenta buscar direto
-      const { data: directData, error: directError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .maybeSingle();
-
-      if (!directError && directData) {
-        setProfile(directData as UserProfile);
-        return;
-      }
-
-      // Se não achar, cria o perfil
-      const { data: newProfile, error: createError } = await supabase
-        .from("profiles")
-        .insert({
-          id: session.user.id,
-          email: session.user.email,
-          role: "funcionario",
-        })
-        .select()
-        .single();
-
-      if (!createError && newProfile) {
-        setProfile(newProfile as UserProfile);
       } else {
-        console.error("Failed to create profile:", createError);
+        const { data: directData, error: directError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .maybeSingle();
+
+        if (directData && !directError) {
+          setProfile(directData as UserProfile);
+        } else {
+          const { data: newProfile, error: createError } = await supabase
+            .from("profiles")
+            .insert({
+              id: session.user.id,
+              email: session.user.email,
+              role: "funcionario",
+            })
+            .select()
+            .single();
+
+          if (!createError && newProfile) {
+            setProfile(newProfile as UserProfile);
+          } else {
+            console.error("Erro ao criar perfil:", createError);
+          }
+        }
       }
     } catch (error) {
-      console.error("Error handling session:", error);
+      console.error("Erro em handleSession:", error);
     } finally {
       setIsLoading(false);
     }
@@ -122,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       return { error };
     } catch (error) {
-      console.error("Sign in error:", error);
+      console.error("Erro no signIn:", error);
       return { error };
     }
   };
@@ -132,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut();
       router.replace("/login");
     } catch (error) {
-      console.error("Sign out error:", error);
+      console.error("Erro no signOut:", error);
     }
   };
 
