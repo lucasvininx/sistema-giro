@@ -1,67 +1,117 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { formatarStatus, getStatusColor, supabase, type StatusOperacao } from "@/lib/supabase"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, MoreHorizontal, Plus, Search, Building, UserCircle } from "lucide-react"
-import Link from "next/link"
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import {
+  formatarStatus,
+  getStatusColor,
+  supabase,
+  type StatusOperacao,
+} from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Building,
+  UserCircle,
+} from "lucide-react";
+import Link from "next/link";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function OperacoesPage() {
-  const { profile } = useAuth()
-  const [operacoes, setOperacoes] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("todos")
-  const [tipoFilter, setTipoFilter] = useState("todos")
+  const { profile } = useAuth();
+  const [operacoes, setOperacoes] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [tipoFilter, setTipoFilter] = useState("todos");
+
+  // Novo estado para o filtro "Minhas Operações"
+  const [apenasMinhasOperacoes, setApenasMinhasOperacoes] = useState(true);
+
+  // Verificar se o usuário é administrador
+  const isAdmin = profile?.role === "master";
 
   useEffect(() => {
-    fetchOperacoes()
-  }, [profile])
+    if (profile) {
+      fetchOperacoes();
+    }
+  }, [profile, apenasMinhasOperacoes]);
 
   const fetchOperacoes = async () => {
-    setIsLoading(true)
+    if (!profile) return;
 
-    const query = supabase
-      .from("operacoes")
-      .select(`
+    setIsLoading(true);
+
+    let query = supabase.from("operacoes").select(`
         *,
         profiles(nome)
-      `)
-      .order("created_at", { ascending: false })
+      `);
 
-    const { data, error } = await query
-
-    if (error) {
-      console.error("Erro ao buscar operações:", error)
-    } else {
-      setOperacoes(data || [])
+    // Aplicar filtro de usuário (a menos que seja admin e o filtro esteja desativado)
+    if (apenasMinhasOperacoes || !isAdmin) {
+      query = query.eq("created_by", profile.id);
     }
 
-    setIsLoading(false)
-  }
+    // Ordenar por data de criação (mais recentes primeiro)
+    query = query.order("created_at", { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Erro ao buscar operações:", error);
+    } else {
+      setOperacoes(data || []);
+    }
+
+    setIsLoading(false);
+  };
 
   const filteredOperacoes = operacoes.filter((op) => {
     // Filtro de busca
     const matchesSearch =
       searchTerm === "" ||
-      (op.tipo_pessoa === "juridica" && op.cnpj_empresa?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (op.tipo_pessoa === "fisica" && op.nome_cliente?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (op.tipo_pessoa === "fisica" && op.cpf?.includes(searchTerm))
+      (op.tipo_pessoa === "juridica" &&
+        op.cnpj_empresa?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (op.tipo_pessoa === "fisica" &&
+        op.nome_cliente?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (op.tipo_pessoa === "fisica" && op.cpf?.includes(searchTerm));
 
     // Filtro de status
-    const matchesStatus = statusFilter === "todos" || op.status === statusFilter
+    const matchesStatus =
+      statusFilter === "todos" || op.status === statusFilter;
 
     // Filtro de tipo de pessoa
-    const matchesTipo = tipoFilter === "todos" || op.tipo_pessoa === tipoFilter
+    const matchesTipo = tipoFilter === "todos" || op.tipo_pessoa === tipoFilter;
 
-    return matchesSearch && matchesStatus && matchesTipo
-  })
+    return matchesSearch && matchesStatus && matchesTipo;
+  });
 
   return (
     <div className="space-y-6">
@@ -89,7 +139,7 @@ export default function OperacoesPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Filtrar por status" />
@@ -98,12 +148,22 @@ export default function OperacoesPage() {
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pre_analise">Pré-análise</SelectItem>
                   <SelectItem value="analise">Análise</SelectItem>
-                  <SelectItem value="analise_credito">Análise de Crédito</SelectItem>
-                  <SelectItem value="analise_juridica_laudo">Análise Jurídica e Laudo</SelectItem>
+                  <SelectItem value="analise_credito">
+                    Análise de Crédito
+                  </SelectItem>
+                  <SelectItem value="analise_juridica_laudo">
+                    Análise Jurídica e Laudo
+                  </SelectItem>
                   <SelectItem value="comite">Comitê</SelectItem>
-                  <SelectItem value="credito_aprovado">Crédito Aprovado</SelectItem>
-                  <SelectItem value="contrato_assinado">Contrato Assinado</SelectItem>
-                  <SelectItem value="contrato_registrado">Contrato Registrado</SelectItem>
+                  <SelectItem value="credito_aprovado">
+                    Crédito Aprovado
+                  </SelectItem>
+                  <SelectItem value="contrato_assinado">
+                    Contrato Assinado
+                  </SelectItem>
+                  <SelectItem value="contrato_registrado">
+                    Contrato Registrado
+                  </SelectItem>
                   <SelectItem value="recusada">Recusada</SelectItem>
                 </SelectContent>
               </Select>
@@ -118,6 +178,23 @@ export default function OperacoesPage() {
                   <SelectItem value="fisica">Pessoa Física</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Filtro "Minhas Operações" - visível apenas para administradores */}
+              {isAdmin && (
+                <div className="flex items-center space-x-2 bg-muted p-2 rounded-md">
+                  <Switch
+                    id="minhas-operacoes"
+                    checked={apenasMinhasOperacoes}
+                    onCheckedChange={setApenasMinhasOperacoes}
+                  />
+                  <Label
+                    htmlFor="minhas-operacoes"
+                    className="text-sm font-medium cursor-pointer"
+                  >
+                    Apenas minhas operações
+                  </Label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -150,13 +227,19 @@ export default function OperacoesPage() {
                           )}
                         </TableCell>
                         <TableCell className="font-medium">
-                          {op.tipo_pessoa === "juridica" ? op.cnpj_empresa : op.nome_cliente || "Cliente"}
+                          {op.tipo_pessoa === "juridica"
+                            ? op.cnpj_empresa
+                            : op.nome_cliente || "Cliente"}
                         </TableCell>
                         <TableCell>{op.profiles?.nome}</TableCell>
-                        <TableCell>{new Date(op.created_at).toLocaleDateString("pt-BR")}</TableCell>
+                        <TableCell>
+                          {new Date(op.created_at).toLocaleDateString("pt-BR")}
+                        </TableCell>
                         <TableCell>
                           <span
-                            className={`px-2 py-1 text-xs rounded-full ${getStatusColor(op.status as StatusOperacao)}`}
+                            className={`px-2 py-1 text-xs rounded-full ${getStatusColor(
+                              op.status as StatusOperacao
+                            )}`}
                           >
                             {formatarStatus(op.status as StatusOperacao)}
                           </span>
@@ -171,10 +254,14 @@ export default function OperacoesPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/operacoes/${op.id}`}>Ver detalhes</Link>
+                                <Link href={`/operacoes/${op.id}`}>
+                                  Ver detalhes
+                                </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
-                                <Link href={`/operacoes/${op.id}/editar`}>Editar</Link>
+                                <Link href={`/operacoes/${op.id}/editar`}>
+                                  Editar
+                                </Link>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -183,8 +270,13 @@ export default function OperacoesPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                        Nenhuma operação encontrada
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-6 text-muted-foreground"
+                      >
+                        {isAdmin && !apenasMinhasOperacoes
+                          ? "Nenhuma operação encontrada no sistema"
+                          : "Você não possui operações cadastradas"}
                       </TableCell>
                     </TableRow>
                   )}
@@ -195,5 +287,5 @@ export default function OperacoesPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
