@@ -29,13 +29,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchSession = async () => {
       try {
+        setIsLoading(true)
         const {
           data: { session },
         } = await supabase.auth.getSession()
 
-        // Don't set loading to false yet if we're on a protected route and need to fetch the profile
+        // Se não há sessão e não estamos na página de login, redirecione
         if (!session && pathname !== "/login") {
+          setIsLoading(false)
           router.push("/login")
+          return
         }
 
         await handleSession(session)
@@ -89,7 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!profileError && profileData) {
           console.log("Profile loaded via RPC:", profileData)
           setProfile(profileData as UserProfile)
-          setIsLoading(false)
           return
         } else if (profileError) {
           console.warn("Error using get_my_profile RPC:", profileError)

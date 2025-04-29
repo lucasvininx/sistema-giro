@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation"
 import { LayoutDashboard, Users, FileText, UserCircle, LogOut, Menu, X, Handshake } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
-import Image from "next/image"
 
 export function Sidebar() {
   const { signOut, isMaster } = useAuth()
@@ -77,7 +76,9 @@ export function Sidebar() {
         <div className="flex flex-col h-full">
           <div className="p-4 border-b border-gray-800">
             <div className="flex items-center justify-center mb-2">
-              <Image src="/images/giro-capital-logo.png" alt="Giro Capital" width={150} height={50} priority />
+              <h1 className="text-2xl font-bold text-orange-500">
+                Giro <span className="text-blue-600">Capital</span>
+              </h1>
             </div>
           </div>
 

@@ -1,30 +1,21 @@
 "use client"
 
-import type React from "react"
-
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, MoreHorizontal, Plus, Search } from "lucide-react"
-import { toast } from "@/components/ui/use-toast"
+import { Loader2, MoreHorizontal, Search } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { GuiaAdmin } from "./guia-admin"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ClientUserForm } from "./client-user-form"
+import { AdminApiForm } from "./admin-api-form"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { InfoIcon } from "lucide-react"
 
 export default function UsuariosPage() {
   const { isMaster } = useAuth()
@@ -32,14 +23,6 @@ export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [newUser, setNewUser] = useState({
-    email: "",
-    password: "",
-    nome: "",
-    role: "funcionario",
-  })
 
   useEffect(() => {
     if (!isMaster) {
@@ -53,15 +36,19 @@ export default function UsuariosPage() {
   const fetchUsuarios = async () => {
     setIsLoading(true)
 
-    const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false })
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false })
 
-    if (error) {
+      if (error) {
+        console.error("Erro ao buscar usuários:", error)
+      } else {
+        setUsuarios(data || [])
+      }
+    } catch (error) {
       console.error("Erro ao buscar usuários:", error)
-    } else {
-      setUsuarios(data || [])
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   const filteredUsuarios = usuarios.filter((usuario) => {
@@ -71,80 +58,6 @@ export default function UsuariosPage() {
       usuario.email?.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setNewUser((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleRoleChange = (value: string) => {
-    setNewUser((prev) => ({ ...prev, role: value }))
-  }
-
-  const handleCreateUser = async () => {
-    if (!newUser.email || !newUser.password || !newUser.nome) {
-      toast({
-        title: "Erro",
-        description: "Preencha todos os campos obrigatórios",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      // Criar usuário no Auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: newUser.email,
-        password: newUser.password,
-        email_confirm: true,
-      })
-
-      if (authError) {
-        throw new Error(`Erro ao criar usuário: ${authError.message}`)
-      }
-
-      if (authData.user) {
-        // Atualizar o perfil do usuário
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({
-            nome: newUser.nome,
-            role: newUser.role,
-          })
-          .eq("id", authData.user.id)
-
-        if (profileError) {
-          throw new Error(`Erro ao atualizar perfil: ${profileError.message}`)
-        }
-
-        toast({
-          title: "Usuário criado com sucesso!",
-          description: `O novo usuário foi adicionado ao sistema como ${newUser.role === "master" ? "Administrador" : "Funcionário"}.`,
-        })
-
-        setIsDialogOpen(false)
-        setNewUser({
-          email: "",
-          password: "",
-          nome: "",
-          role: "funcionario",
-        })
-
-        fetchUsuarios()
-      }
-    } catch (error: any) {
-      console.error("Erro ao criar usuário:", error)
-      toast({
-        title: "Erro ao criar usuário",
-        description: error.message,
-        variant: "destructive",
-      })
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
   const formatRole = (role: string) => {
     return role === "master" ? "Administrador" : "Funcionário"
@@ -158,75 +71,16 @@ export default function UsuariosPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold">Usuários</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <Plus className="mr-2 h-4 w-4" /> Novo Usuário
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Criar Novo Usuário</DialogTitle>
-              <DialogDescription>Preencha os dados para adicionar um novo usuário ao sistema.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome</Label>
-                <Input
-                  id="nome"
-                  name="nome"
-                  value={newUser.nome}
-                  onChange={handleInputChange}
-                  placeholder="Nome completo"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={newUser.email}
-                  onChange={handleInputChange}
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={newUser.password}
-                  onChange={handleInputChange}
-                  placeholder="Senha"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Tipo de Usuário</Label>
-                <Select value={newUser.role} onValueChange={handleRoleChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="funcionario">Funcionário</SelectItem>
-                    <SelectItem value="master">Administrador</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button className="bg-orange-500 hover:bg-orange-600" onClick={handleCreateUser} disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Criar Usuário
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
+
+      <Alert>
+        <InfoIcon className="h-4 w-4" />
+        <AlertTitle>Problemas com a criação de usuários</AlertTitle>
+        <AlertDescription>
+          Devido a problemas com a API de autenticação do Supabase, estamos oferecendo métodos alternativos para criar
+          usuários. Tente os diferentes métodos abaixo para ver qual funciona melhor no seu caso.
+        </AlertDescription>
+      </Alert>
 
       <GuiaAdmin />
 
@@ -270,7 +124,9 @@ export default function UsuariosPage() {
                         <TableCell>
                           <span
                             className={`px-2 py-1 text-xs rounded-full ${
-                              usuario.role === "master" ? "bg-black text-white" : "bg-orange-100 text-orange-800"
+                              usuario.role === "master"
+                                ? "bg-black text-white dark:bg-gray-700"
+                                : "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
                             }`}
                           >
                             {formatRole(usuario.role)}
@@ -306,6 +162,21 @@ export default function UsuariosPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-8">
+        <Tabs defaultValue="client">
+          <TabsList className="mb-4">
+            <TabsTrigger value="client">Cliente</TabsTrigger>
+            <TabsTrigger value="api">API</TabsTrigger>
+          </TabsList>
+          <TabsContent value="client">
+            <ClientUserForm onSuccess={fetchUsuarios} />
+          </TabsContent>
+          <TabsContent value="api">
+            <AdminApiForm onSuccess={fetchUsuarios} />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

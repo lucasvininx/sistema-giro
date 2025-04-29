@@ -14,6 +14,11 @@ export async function middleware(req: NextRequest) {
   const publicRoutes = ["/login"]
   const isPublicRoute = publicRoutes.some((route) => req.nextUrl.pathname.startsWith(route))
 
+  // Skip middleware for server actions
+  if (req.nextUrl.pathname.includes("/actions/")) {
+    return res
+  }
+
   // If not authenticated and trying to access protected routes
   if (!session && !isPublicRoute) {
     const redirectUrl = new URL("/login", req.url)

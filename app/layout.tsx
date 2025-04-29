@@ -9,7 +9,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Giro Capital",
+  title: "Giro Capital - Sistema Interno",
   description: "Sistema de gestão de operações da Giro Capital",
     generator: 'v0.dev'
 }

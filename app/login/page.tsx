@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import Image from "next/image"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -34,29 +33,45 @@ export default function LoginPage() {
     setError(null)
 
     try {
+      if (!email || !password) {
+        setError("Por favor, preencha todos os campos.")
+        setIsLoading(false)
+        return
+      }
+
+      console.log("Tentando fazer login com:", email)
       const { error } = await signIn(email, password)
 
       if (error) {
-        setError("Credenciais inválidas. Por favor, tente novamente.")
+        console.error("Erro de login:", error)
+        if (error.message) {
+          setError(`Erro: ${error.message}`)
+        } else {
+          setError("Credenciais inválidas. Por favor, tente novamente.")
+        }
       } else {
+        console.log("Login bem-sucedido, redirecionando...")
         router.push("/dashboard")
       }
     } catch (err) {
+      console.error("Erro inesperado:", err)
       setError("Ocorreu um erro ao fazer login. Por favor, tente novamente.")
-      console.error(err)
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <div className="flex justify-center mb-4">
-            <Image src="/images/giro-capital-logo.png" alt="Giro Capital" width={180} height={60} priority />
+            <h1 className="text-4xl font-bold">
+              <span className="text-orange-500">Giro</span>
+              <span className="text-orange-500"> Capital</span>
+            </h1>
           </div>
-          <CardTitle className="text-2xl font-bold text-center text-orange-500">Giro Capital</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center text-orange-500">Sistema Interno</CardTitle>
           <CardDescription className="text-center">Entre com suas credenciais para acessar o sistema</CardDescription>
         </CardHeader>
         <CardContent>

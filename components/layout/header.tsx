@@ -12,6 +12,11 @@ export function Header() {
 
   return (
     <header className="bg-background border-b border-border h-16 flex items-center px-4 md:px-6">
+      <div className="md:hidden flex items-center">
+        <h1 className="text-xl font-bold">
+          <span className="text-orange-500">Giro</span> <span className="text-blue-600">Capital</span>
+        </h1>
+      </div>
       <div className="flex-1 flex justify-end items-center space-x-4">
         <ThemeToggle />
 

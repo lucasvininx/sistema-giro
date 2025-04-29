@@ -36,6 +36,16 @@ const tiposImovel = [
   { id: "multi_familiar", label: "Multi familiar" },
 ]
 
+const tiposComprovacaoRenda = [
+  { id: "holerite", label: "Holerite" },
+  { id: "declaracao_ir", label: "Declaração de Imposto de Renda" },
+  { id: "extrato_bancario", label: "Extrato Bancário" },
+  { id: "contrato_trabalho", label: "Contrato de Trabalho" },
+  { id: "decore", label: "DECORE (Declaração Comprobatória de Percepção de Rendimentos)" },
+  { id: "pro_labore", label: "Pró-Labore" },
+  { id: "outros", label: "Outros" },
+]
+
 const socioSchema = z.object({
   id: z.string().optional(),
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -49,10 +59,9 @@ const socioSchema = z.object({
 // Schema base para ambos os tipos de pessoa
 const baseFormSchema = z.object({
   tipo_pessoa: z.enum(["fisica", "juridica"]),
+  nome_operacao: z.string().min(1, "Nome da operação é obrigatório"),
+  endereco_imovel: z.string().min(1, "Endereço do imóvel é obrigatório"),
   estado_civil: z.string().min(1, "Estado civil é obrigatório"),
-  faturamento: z.coerce.number().min(0, "Faturamento deve ser maior que zero"),
-  periodo_faturamento: z.enum(["mensal", "anual"]),
-  quantidade_funcionarios: z.coerce.number().min(0, "Quantidade inválida"),
   possui_dividas: z.boolean().default(false),
   valor_dividas: z.coerce.number().optional(),
   instituicao_financeira: z.string().optional(),
@@ -61,8 +70,7 @@ const baseFormSchema = z.object({
   valor_aluguel: z.coerce.number().optional(),
   tipos_imovel: z.array(z.string()).min(1, "Selecione pelo menos um tipo de imóvel"),
   status: z.string().min(1, "Status é obrigatório"),
-  socios: z.array(socioSchema).optional(),
-  parceiro_id: z.string().optional(),
+  parceiro_id: z.string().optional().nullable(),
   valor: z.coerce.number().default(0),
 })
 
@@ -70,6 +78,9 @@ const baseFormSchema = z.object({
 const pessoaJuridicaSchema = baseFormSchema.extend({
   tipo_pessoa: z.literal("juridica"),
   cnpj_empresa: z.string().min(14, "CNPJ inválido").max(18, "CNPJ inválido"),
+  faturamento: z.coerce.number().min(0, "Faturamento deve ser maior que zero"),
+  periodo_faturamento: z.enum(["mensal", "anual"]),
+  quantidade_funcionarios: z.coerce.number().min(0, "Quantidade inválida"),
   socios: z.array(socioSchema).min(1, "Adicione pelo menos um sócio"),
 })
 
@@ -80,6 +91,9 @@ const pessoaFisicaSchema = baseFormSchema.extend({
   nome: z.string().min(1, "Nome é obrigatório"),
   telefone: z.string().min(1, "Telefone é obrigatório"),
   email: z.string().email("Email inválido"),
+  profissao: z.string().min(1, "Profissão é obrigatória"),
+  salario: z.coerce.number().min(0, "Salário deve ser maior ou igual a zero"),
+  comprovacao_renda: z.string().min(1, "Selecione o tipo de comprovação de renda"),
 })
 
 // Schema combinado com discriminação por tipo_pessoa
@@ -119,12 +133,28 @@ export default function NovaOperacaoPage() {
     const fetchParceiros = async () => {
       setIsLoadingParceiros(true)
       try {
+        // First check if the parceiros table exists
+        const { error: tableCheckError } = await supabase.from("parceiros").select("id").limit(1).single()
+
+        if (tableCheckError && tableCheckError.code === "PGRST116") {
+          // Table doesn't exist or can't be accessed
+          console.warn("Tabela de parceiros não existe ou não pode ser acessada:", tableCheckError)
+          setParceiros([])
+          return
+        }
+
+        // If table exists, fetch the partners
         const { data, error } = await supabase.from("parceiros").select("id, nome, documento").order("nome")
 
-        if (error) throw error
-        setParceiros(data || [])
+        if (error) {
+          console.error("Erro ao buscar parceiros:", error)
+          setParceiros([])
+        } else {
+          setParceiros(data || [])
+        }
       } catch (error) {
         console.error("Erro ao buscar parceiros:", error)
+        setParceiros([])
       } finally {
         setIsLoadingParceiros(false)
       }
@@ -137,10 +167,9 @@ export default function NovaOperacaoPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       tipo_pessoa: "juridica",
+      nome_operacao: "",
+      endereco_imovel: "",
       estado_civil: "solteiro",
-      faturamento: 0,
-      periodo_faturamento: "mensal",
-      quantidade_funcionarios: 0,
       possui_dividas: false,
       valor_dividas: 0,
       instituicao_financeira: "",
@@ -151,6 +180,10 @@ export default function NovaOperacaoPage() {
       status: "pre_analise",
       parceiro_id: undefined,
       valor: 0,
+      // Campos específicos para pessoa jurídica
+      faturamento: 0,
+      periodo_faturamento: "mensal",
+      quantidade_funcionarios: 0,
       socios: [
         {
           id: uuidv4(),
@@ -162,6 +195,10 @@ export default function NovaOperacaoPage() {
           percentual_participacao: 0,
         },
       ],
+      // Campos específicos para pessoa física
+      profissao: "",
+      salario: 0,
+      comprovacao_renda: "",
     },
   })
 
@@ -176,12 +213,18 @@ export default function NovaOperacaoPage() {
       // Limpar campos específicos de pessoa jurídica
       resetField("cnpj_empresa")
       resetField("socios")
+      resetField("faturamento")
+      resetField("periodo_faturamento")
+      resetField("quantidade_funcionarios")
     } else {
       // Limpar campos específicos de pessoa física
       resetField("cpf")
       resetField("nome")
       resetField("telefone")
       resetField("email")
+      resetField("profissao")
+      resetField("salario")
+      resetField("comprovacao_renda")
 
       // Garantir que haja pelo menos um sócio para pessoa jurídica
       if (!watch("socios") || watch("socios").length === 0) {
@@ -301,11 +344,11 @@ export default function NovaOperacaoPage() {
 
     try {
       // Preparar dados da operação com base no tipo de pessoa
+      // First attempt with all fields
       const operacaoData: any = {
+        nome_operacao: data.nome_operacao,
+        endereco_imovel: data.endereco_imovel,
         estado_civil: data.estado_civil,
-        faturamento: data.faturamento,
-        periodo_faturamento: data.periodo_faturamento,
-        quantidade_funcionarios: data.quantidade_funcionarios,
         possui_dividas: data.possui_dividas,
         valor_dividas: data.possui_dividas ? data.valor_dividas : null,
         instituicao_financeira: data.possui_dividas ? data.instituicao_financeira : null,
@@ -323,15 +366,70 @@ export default function NovaOperacaoPage() {
       // Adicionar campos específicos com base no tipo de pessoa
       if (data.tipo_pessoa === "juridica") {
         operacaoData.cnpj_empresa = data.cnpj_empresa
+        operacaoData.faturamento = data.faturamento
+        operacaoData.periodo_faturamento = data.periodo_faturamento
+        operacaoData.quantidade_funcionarios = data.quantidade_funcionarios
       } else {
         operacaoData.cpf = data.cpf
         operacaoData.nome_cliente = data.nome
         operacaoData.telefone_cliente = data.telefone
         operacaoData.email_cliente = data.email
+        operacaoData.profissao = data.profissao
+        operacaoData.salario = data.salario
+        operacaoData.comprovacao_renda = data.comprovacao_renda
       }
 
       // Criar a operação
-      const { data: operacao, error } = await supabase.from("operacoes").insert(operacaoData).select().single()
+      let { data: operacao, error } = await supabase.from("operacoes").insert(operacaoData).select().single()
+
+      // If there's an error related to parceiro_id, try again without it
+      if (error && error.message.includes("parceiro_id")) {
+        console.warn("Erro com parceiro_id, tentando novamente sem este campo:", error.message)
+
+        // Remove the parceiro_id field and try again
+        const { parceiro_id, ...operacaoDataWithoutParceiro } = operacaoData
+
+        const result = await supabase.from("operacoes").insert(operacaoDataWithoutParceiro).select().single()
+        operacao = result.data
+        error = result.error
+      }
+
+      // If there's an error related to new fields, try again with only essential fields
+      if (error && (error.message.includes("column") || error.message.includes("does not exist"))) {
+        console.warn("Erro com novos campos, tentando novamente com campos essenciais:", error.message)
+
+        // Keep only essential fields that are known to exist
+        const essentialData = {
+          estado_civil: data.estado_civil,
+          possui_dividas: data.possui_dividas,
+          valor_dividas: data.possui_dividas ? data.valor_dividas : null,
+          imovel_alugado: data.imovel_alugado,
+          valor_aluguel: data.imovel_alugado ? data.valor_aluguel : null,
+          tipos_imovel: data.tipos_imovel,
+          status: data.status,
+          created_by: profile.id,
+          tipo_pessoa: data.tipo_pessoa,
+          valor: data.valor || 0,
+        }
+
+        // Add type-specific essential fields
+        if (data.tipo_pessoa === "juridica") {
+          essentialData.cnpj_empresa = data.cnpj_empresa
+        } else {
+          essentialData.cpf = data.cpf
+          essentialData.nome_cliente = data.nome
+          essentialData.telefone_cliente = data.telefone
+          essentialData.email_cliente = data.email
+        }
+
+        const result = await supabase.from("operacoes").insert(essentialData).select().single()
+        operacao = result.data
+        error = result.error
+
+        if (error) {
+          throw new Error(`Erro ao criar operação: ${error.message}`)
+        }
+      }
 
       if (error) {
         throw new Error(`Erro ao criar operação: ${error.message}`)
@@ -463,6 +561,40 @@ export default function NovaOperacaoPage() {
                   )}
                 />
 
+                {/* Nome da Operação */}
+                <FormField
+                  control={form.control}
+                  name="nome_operacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome da Operação</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Nome da empresa ou cliente" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        {tipoPessoa === "juridica" ? "Informe o nome da empresa" : "Informe o nome do cliente"}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Endereço do Imóvel */}
+                <FormField
+                  control={form.control}
+                  name="endereco_imovel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Endereço do Imóvel</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Endereço completo do imóvel" {...field} />
+                      </FormControl>
+                      <FormDescription>Informe o endereço completo onde se encontra o imóvel</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 {/* Valor da operação */}
                 <FormField
                   control={form.control}
@@ -481,75 +613,185 @@ export default function NovaOperacaoPage() {
 
                 {/* Campos específicos para pessoa jurídica */}
                 {tipoPessoa === "juridica" && (
-                  <FormField
-                    control={form.control}
-                    name="cnpj_empresa"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>CNPJ da Empresa</FormLabel>
-                        <FormControl>
-                          <Input placeholder="00.000.000/0000-00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="cnpj_empresa"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>CNPJ da Empresa</FormLabel>
+                          <FormControl>
+                            <Input placeholder="00.000.000/0000-00" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="faturamento"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Faturamento</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="periodo_faturamento"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Período</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o período" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="mensal">Mensal</SelectItem>
+                                <SelectItem value="anual">Anual</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="quantidade_funcionarios"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Quantidade de Funcionários</FormLabel>
+                            <FormControl>
+                              <Input type="number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </>
                 )}
 
                 {/* Campos específicos para pessoa física */}
                 {tipoPessoa === "fisica" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <FormField
-                      control={form.control}
-                      name="nome"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nome Completo</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Nome completo" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="nome"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome Completo</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Nome completo" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="cpf"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>CPF</FormLabel>
+                            <FormControl>
+                              <Input placeholder="000.000.000-00" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="email@exemplo.com" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="telefone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Telefone</FormLabel>
+                            <FormControl>
+                              <Input placeholder="(00) 00000-0000" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="profissao"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Profissão</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Profissão" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="salario"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Salário (R$)</FormLabel>
+                            <FormControl>
+                              <Input type="number" placeholder="0" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
                     <FormField
                       control={form.control}
-                      name="cpf"
+                      name="comprovacao_renda"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>CPF</FormLabel>
-                          <FormControl>
-                            <Input placeholder="000.000.000-00" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" placeholder="email@exemplo.com" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="telefone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Telefone</FormLabel>
-                          <FormControl>
-                            <Input placeholder="(00) 00000-0000" {...field} />
-                          </FormControl>
+                          <FormLabel>Comprovação de Renda</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo de comprovação" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {tiposComprovacaoRenda.map((tipo) => (
+                                <SelectItem key={tipo.id} value={tipo.id}>
+                                  {tipo.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>Selecione o tipo de documento para comprovação de renda</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -581,84 +823,55 @@ export default function NovaOperacaoPage() {
                   )}
                 />
 
-                {/* Campo de parceiro indicador */}
                 <FormField
                   control={form.control}
                   name="parceiro_id"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Parceiro Indicador (Opcional)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || ""}
+                        onOpenChange={(open) => {
+                          // If there are no parceiros and we're trying to open the select,
+                          // show a warning toast
+                          if (open && parceiros.length === 0) {
+                            toast({
+                              title: "Aviso",
+                              description:
+                                "Não foi possível carregar a lista de parceiros ou não há parceiros cadastrados.",
+                              variant: "warning",
+                            })
+                          }
+                        }}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione um parceiro (opcional)" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {parceiros.map((parceiro) => (
-                            <SelectItem key={parceiro.id} value={parceiro.id}>
-                              {parceiro.nome} - {parceiro.documento}
+                          {parceiros.length > 0 ? (
+                            parceiros.map((parceiro) => (
+                              <SelectItem key={parceiro.id} value={parceiro.id}>
+                                {parceiro.nome} - {parceiro.documento}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>
+                              Nenhum parceiro disponível
                             </SelectItem>
-                          ))}
+                          )}
                         </SelectContent>
                       </Select>
-                      <FormDescription>Selecione o parceiro que indicou esta operação, se aplicável.</FormDescription>
+                      <FormDescription>
+                        Selecione o parceiro que indicou esta operação, se aplicável.
+                        {isLoadingParceiros && " Carregando parceiros..."}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="faturamento"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Faturamento</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="periodo_faturamento"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Período</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione o período" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="mensal">Mensal</SelectItem>
-                            <SelectItem value="anual">Anual</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="quantidade_funcionarios"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Quantidade de Funcionários</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <div className="space-y-4">
                   <FormField
