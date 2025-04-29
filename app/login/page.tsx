@@ -1,64 +1,65 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertCircle } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/auth-context";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const { signIn, isAuthenticated } = useAuth()
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { signIn, isAuthenticated, isLoading: authLoading } = useAuth();
+  const router = useRouter();
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      router.push("/dashboard")
+    if (!authLoading && isAuthenticated) {
+      router.replace("/dashboard");
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
 
     try {
       if (!email || !password) {
-        setError("Por favor, preencha todos os campos.")
-        setIsLoading(false)
-        return
+        setError("Por favor, preencha todos os campos.");
+        setIsLoading(false);
+        return;
       }
 
-      console.log("Tentando fazer login com:", email)
-      const { error } = await signIn(email, password)
+      const { error } = await signIn(email, password);
 
       if (error) {
-        console.error("Erro de login:", error)
         if (error.message) {
-          setError(`Erro: ${error.message}`)
+          setError(`Erro: ${error.message}`);
         } else {
-          setError("Credenciais inválidas. Por favor, tente novamente.")
+          setError("Credenciais inválidas. Por favor, tente novamente.");
         }
       } else {
-        console.log("Login bem-sucedido, redirecionando...")
-        router.push("/dashboard")
+        router.replace("/dashboard");
       }
     } catch (err) {
-      console.error("Erro inesperado:", err)
-      setError("Ocorreu um erro ao fazer login. Por favor, tente novamente.")
+      console.error("Erro inesperado:", err);
+      setError("Ocorreu um erro ao fazer login. Por favor, tente novamente.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
+  };
+
+  if (authLoading) {
+    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
   }
 
   return (
@@ -72,7 +73,9 @@ export default function LoginPage() {
             </h1>
           </div>
           <CardTitle className="text-2xl font-bold text-center text-orange-500">Sistema Interno</CardTitle>
-          <CardDescription className="text-center">Entre com suas credenciais para acessar o sistema</CardDescription>
+          <CardDescription className="text-center">
+            Entre com suas credenciais para acessar o sistema
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
@@ -110,5 +113,5 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
