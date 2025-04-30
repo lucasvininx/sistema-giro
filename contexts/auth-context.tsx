@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
         setProfile(null);
-        if (window.location.pathname !== "/login") {
+        if (location.pathname !== "/login") {
           router.replace("/login");
         }
         setIsLoading(false);
@@ -58,15 +58,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         setUser(session.user);
         await handleSession(session);
-        if (window.location.pathname === "/login") {
+        if (location.pathname === "/login") {
           router.replace("/dashboard");
         }
       } else {
         setUser(null);
         setProfile(null);
-        if (window.location.pathname !== "/login") {
+        if (location.pathname !== "/login") {
           router.replace("/login");
         }
+        setIsLoading(false); // <- Isso estava faltando
       }
     });
 
@@ -78,7 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!session) {
         setUser(null);
         setProfile(null);
-        setIsLoading(false);
         return;
       }
 
@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Erro em handleSession:", error);
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // ← Garante que sempre será liberado
     }
   }
 
@@ -140,6 +140,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
       router.replace("/login");
     } catch (error) {
       console.error("Erro no signOut:", error);
