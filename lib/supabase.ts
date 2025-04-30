@@ -1,7 +1,6 @@
-import { createBrowserSupabaseClient } from "@supabase/auth-helpers-nextjs";
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 
-// Criar o cliente do Supabase para o navegador
-export const supabase = createBrowserSupabaseClient();
+export const supabase = createClientComponentClient();
 
 export type UserRole = "master" | "funcionario";
 

@@ -24,61 +24,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      setIsLoading(true);
-
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("Erro ao pegar sessão:", error);
-      }
-
-      if (session?.user) {
-        setUser(session.user);
-        await handleSession(session);
-      } else {
-        setUser(null);
-        setProfile(null);
-        if (location.pathname !== "/login") {
-          router.replace("/login");
-        }
-        setIsLoading(false);
-      }
-    };
-
-    fetchSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        await handleSession(session);
-        if (location.pathname === "/login") {
-          router.replace("/dashboard");
-        }
-      } else {
-        setUser(null);
-        setProfile(null);
-        if (location.pathname !== "/login") {
-          router.replace("/login");
-        }
-        setIsLoading(false); // <- Isso estava faltando
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [router]);
-
   async function handleSession(session: Session | null) {
     try {
       if (!session) {
         setUser(null);
         setProfile(null);
+        setIsLoading(false);
         return;
       }
 
@@ -120,20 +71,81 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Erro em handleSession:", error);
     } finally {
-      setIsLoading(false); // ← Garante que sempre será liberado
+      setIsLoading(false);
     }
   }
 
+  useEffect(() => {
+    let initialized = false;
+    const fetchSession = async () => {
+      if (initialized) return;
+      initialized = true;
+
+      setIsLoading(true);
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Erro ao pegar sessão:", error);
+      }
+
+      if (session?.user) {
+        setUser(session.user);
+        await handleSession(session);
+      } else {
+        setUser(null);
+        setProfile(null);
+        if (window.location.pathname !== "/login") {
+          router.replace("/login");
+        }
+        setIsLoading(false);
+      }
+    };
+
+    fetchSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        await handleSession(session);
+        if (window.location.pathname === "/login") {
+          router.replace("/dashboard");
+        }
+      } else {
+        setUser(null);
+        setProfile(null);
+        if (window.location.pathname !== "/login") {
+          router.replace("/login");
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
+
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      setIsLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      if (data?.session?.user) {
+        setUser(data.session.user);
+        await handleSession(data.session);
+      }
+
       return { error };
     } catch (error) {
       console.error("Erro no signIn:", error);
       return { error };
+    } finally {
+      setIsLoading(false);
     }
   };
 
