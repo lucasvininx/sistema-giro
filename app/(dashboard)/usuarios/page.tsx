@@ -8,14 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Loader2, MoreHorizontal, Search } from "lucide-react"
+import { Loader2, MoreHorizontal, Search, PlusCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { GuiaAdmin } from "./guia-admin"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ClientUserForm } from "./client-user-form"
-import { AdminApiForm } from "./admin-api-form"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { InfoIcon } from "lucide-react"
+import Link from "next/link"
 
 export default function UsuariosPage() {
   const { isMaster } = useAuth()
@@ -71,18 +66,13 @@ export default function UsuariosPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-bold">Usuários</h1>
+        <Link href="/usuarios/novo">
+          <Button className="bg-orange-500 hover:bg-orange-600">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Novo Usuário
+          </Button>
+        </Link>
       </div>
-
-      <Alert>
-        <InfoIcon className="h-4 w-4" />
-        <AlertTitle>Problemas com a criação de usuários</AlertTitle>
-        <AlertDescription>
-          Devido a problemas com a API de autenticação do Supabase, estamos oferecendo métodos alternativos para criar
-          usuários. Tente os diferentes métodos abaixo para ver qual funciona melhor no seu caso.
-        </AlertDescription>
-      </Alert>
-
-      <GuiaAdmin />
 
       <Card>
         <CardHeader className="pb-3">
@@ -142,7 +132,9 @@ export default function UsuariosPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Editar</DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <Link href={`/usuarios/${usuario.id}/editar`}>Editar</Link>
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="text-red-600">Desativar</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -162,21 +154,6 @@ export default function UsuariosPage() {
           )}
         </CardContent>
       </Card>
-
-      <div className="mt-8">
-        <Tabs defaultValue="client">
-          <TabsList className="mb-4">
-            <TabsTrigger value="client">Cliente</TabsTrigger>
-            <TabsTrigger value="api">API</TabsTrigger>
-          </TabsList>
-          <TabsContent value="client">
-            <ClientUserForm onSuccess={fetchUsuarios} />
-          </TabsContent>
-          <TabsContent value="api">
-            <AdminApiForm onSuccess={fetchUsuarios} />
-          </TabsContent>
-        </Tabs>
-      </div>
     </div>
   )
 }

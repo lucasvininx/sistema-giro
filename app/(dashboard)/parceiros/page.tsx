@@ -1,78 +1,66 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/auth-context";
-import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Loader2, MoreHorizontal, Plus, Search } from "lucide-react";
-import Link from "next/link";
+import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/auth-context"
+import { supabase } from "@/lib/supabase"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Loader2, MoreHorizontal, Plus, Search } from "lucide-react"
+import Link from "next/link"
 
 export default function ParceirosPage() {
-  const { profile } = useAuth();
-  const [parceiros, setParceiros] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [apenasMeusParceiros, setApenasMeusParceiros] = useState(true);
+  const { profile } = useAuth()
+  const [parceiros, setParceiros] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [apenasMeusParceiros, setApenasMeusParceiros] = useState(true)
 
-  const isAdmin = profile?.role === "master";
+  const isAdmin = profile?.role === "master"
 
   useEffect(() => {
     if (profile) {
-      fetchParceiros();
+      fetchParceiros()
     }
-  }, [profile, apenasMeusParceiros]);
+  }, [profile, apenasMeusParceiros])
 
   const fetchParceiros = async () => {
-    setIsLoading(true);
+    setIsLoading(true)
 
     let query = supabase.from("parceiros").select(`
         *,
         profiles(nome)
-      `);
+      `)
 
     // Aplicar filtro por usuário, exceto se for admin e o filtro estiver desativado
     if (!isAdmin || (isAdmin && apenasMeusParceiros)) {
-      query = query.eq("created_by", profile?.id);
+      query = query.eq("created_by", profile?.id)
     }
 
-    query = query.order("created_at", { ascending: false });
+    query = query.order("created_at", { ascending: false })
 
-    const { data, error } = await query;
+    const { data, error } = await query
 
     if (error) {
-      console.error("Erro ao buscar parceiros:", error);
+      console.error("Erro ao buscar parceiros:", error)
     } else {
-      setParceiros(data || []);
+      setParceiros(data || [])
     }
 
-    setIsLoading(false);
-  };
+    setIsLoading(false)
+  }
 
   const filteredParceiros = parceiros.filter((parceiro) => {
     return (
       searchTerm === "" ||
       parceiro.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       parceiro.documento.includes(searchTerm)
-    );
-  });
+    )
+  })
 
   return (
     <div className="space-y-6">
@@ -103,11 +91,7 @@ export default function ParceirosPage() {
 
             {isAdmin && (
               <div className="flex items-center space-x-2">
-                <Switch
-                  id="meus-parceiros"
-                  checked={apenasMeusParceiros}
-                  onCheckedChange={setApenasMeusParceiros}
-                />
+                <Switch id="meus-parceiros" checked={apenasMeusParceiros} onCheckedChange={setApenasMeusParceiros} />
                 <Label htmlFor="meus-parceiros">Apenas meus parceiros</Label>
               </div>
             )}
@@ -134,13 +118,9 @@ export default function ParceirosPage() {
                   {filteredParceiros.length > 0 ? (
                     filteredParceiros.map((parceiro) => (
                       <TableRow key={parceiro.id}>
-                        <TableCell className="font-medium">
-                          {parceiro.nome}
-                        </TableCell>
+                        <TableCell className="font-medium">{parceiro.nome}</TableCell>
                         <TableCell>
-                          {parceiro.tipo_documento === "cpf"
-                            ? "CPF: "
-                            : "CNPJ: "}
+                          {parceiro.tipo_documento === "cpf" ? "CPF: " : "CNPJ: "}
                           {parceiro.documento}
                         </TableCell>
                         <TableCell>{parceiro.telefone}</TableCell>
@@ -156,14 +136,10 @@ export default function ParceirosPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem asChild>
-                                <Link href={`/parceiros/${parceiro.id}`}>
-                                  Ver detalhes
-                                </Link>
+                                <Link href={`/parceiros/${parceiro.id}`}>Ver detalhes</Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
-                                <Link href={`/parceiros/${parceiro.id}/editar`}>
-                                  Editar
-                                </Link>
+                                <Link href={`/parceiros/${parceiro.id}/editar`}>Editar</Link>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -172,10 +148,7 @@ export default function ParceirosPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell
-                        colSpan={6}
-                        className="text-center py-6 text-gray-500"
-                      >
+                      <TableCell colSpan={6} className="text-center py-6 text-gray-500">
                         {!isAdmin || apenasMeusParceiros
                           ? "Você não possui parceiros cadastrados"
                           : "Nenhum parceiro encontrado no sistema"}
@@ -189,5 +162,5 @@ export default function ParceirosPage() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
